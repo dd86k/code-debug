@@ -12,12 +12,21 @@ Versioning].
 
 ### Added
 
+- fix missing output of variable type for structure ([@henryriley0])
+- add static variable support ([@henryriley0])
 - fix gdb check error when debug beginning ([@henryriley0])
 - fix implicitly type error in log message when build vsix ([@henryriley0])
 - check for configured debugger before start to provide a nicer error message
   ([@GitMensch])
 - New `frameFilters` option for GDB that allows using custom frame filters,
   enabled by default ([@JacquesLucke])
+- Suppress error for hover as the user may just play with the mouse ([@oltolm]).
+- solve the problem of failed parsing of containers ([@henryriley0])
+- Fixes #421 - Added `registerLimit` option to specify the registers to
+  display - PR #444 ([@chenzhiy2001])
+- resolve the issue of not being able to set the GDB binary with a path on
+  Windows - PR #448 ([@henryriley0])
+- add qt unit test ([@henryriley0])
 
 ## [0.27.0] - 2024-02-07
 
@@ -239,7 +248,7 @@ Versioning].
 [@abussy-aldebaran]: https://github.com/abussy-aldebaran
 [@anshulrouthu]: https://github.com/anshulrouthu
 [@brownts]: https://github.com/brownts
-[@coldencullen]: https://github.com/ColdenCullen
+[@chenzhiy2001]: https://github.com/chenzhiy2001
 [@eamousing]: https://github.com/eamousing
 [@evangrayk]: https://github.com/evangrayk
 [@faustinoaq]: https://github.com/faustinoaq

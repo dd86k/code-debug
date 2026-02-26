@@ -1,8 +1,8 @@
 import { VariableObject } from "./backend";
 import { MINode } from "./mi_parse";
 
-const resultRegex = /^([a-zA-Z_\-][a-zA-Z0-9_\-]*|\[\d+\])\s*=\s*/;
-const variableRegex = /^[a-zA-Z_\-][a-zA-Z0-9_\-]*/;
+const resultRegex = /^([a-zA-Z_\-][a-zA-Z0-9_\-<> :(),]*|\[\d+\])\s*=\s*/;
+const variableRegex = /^[a-zA-Z_\-\'\(][a-zA-Z0-9_\-\|\>\ \\\'\)\:]*/;
 const errorRegex = /^\<.+?\>/;
 const referenceStringRegex = /^(0x[0-9a-fA-F]+\s*)"/;
 const referenceRegex = /^0x[0-9a-fA-F]+/;
@@ -15,9 +15,9 @@ const pointerCombineChar = ".";
 export function isExpandable(value: string): number {
 	let match;
 	value = value.trim();
-	if (value.length == 0) return 0;
+	if (value.length === 0) return 0;
 	else if (value.startsWith("{...}")) return 2; // lldb string/array
-	else if (value[0] == '{') return 1; // object
+	else if (value[0] === '{') return 1; // object
 	else if (value.startsWith("true")) return 0;
 	else if (value.startsWith("false")) return 0;
 	else if (match = nullpointerRegex.exec(value)) return 0;
@@ -33,7 +33,7 @@ export function isExpandable(value: string): number {
 export function expandValue(variableCreate: (arg: VariableObject | string, options?: any) => any, value: string, root: string = "", extra: any = undefined): any {
 	const parseCString = () => {
 		value = value.trim();
-		if (value[0] != '"' && value[0] != '\'')
+		if (value[0] !== '"' && value[0] !== '\'')
 			return "";
 		let stringEnd = 1;
 		let inString = true;
@@ -43,9 +43,9 @@ export function expandValue(variableCreate: (arg: VariableObject | string, optio
 		while (inString) {
 			if (escaped)
 				escaped = false;
-			else if (remaining[0] == '\\')
+			else if (remaining[0] === '\\')
 				escaped = true;
-			else if (remaining[0] == charStr)
+			else if (remaining[0] === charStr)
 				inString = false;
 
 			remaining = remaining.substring(1);
@@ -87,17 +87,17 @@ export function expandValue(variableCreate: (arg: VariableObject | string, optio
 
 	const parseTupleOrList = () => {
 		value = value.trim();
-		if (value[0] != '{')
+		if (value[0] !== '{')
 			return undefined;
 		const oldContent = value;
 		value = value.substring(1).trim();
-		if (value[0] == '}') {
+		if (value[0] === '}') {
 			value = value.substring(1).trim();
 			return [];
 		}
 		if (value.startsWith("...")) {
 			value = value.substring(3).trim();
-			if (value[0] == '}') {
+			if (value[0] === '}') {
 				value = value.substring(1).trim();
 				return <any> "<...>";
 			}
@@ -105,14 +105,18 @@ export function expandValue(variableCreate: (arg: VariableObject | string, optio
 		const eqPos = value.indexOf("=");
 		const newValPos1 = value.indexOf("{");
 		const newValPos2 = value.indexOf(",");
+		const newValPos3 = value.indexOf("}");
 		let newValPos = newValPos1;
-		if (newValPos2 != -1 && newValPos2 < newValPos1)
+		if (newValPos2 !== -1 && newValPos2 < newValPos1)
 			newValPos = newValPos2;
-		if (newValPos != -1 && eqPos > newValPos || eqPos == -1) { // is value list
+		if (newValPos !== -1 && eqPos > newValPos || eqPos === -1 || eqPos > newValPos3 && newValPos2 !== -1 || value.startsWith("std::")) { // is value list
 			const values = [];
 			stack.push("[0]");
 			let val = parseValue();
 			stack.pop();
+			if(typeof val === "string" && val.endsWith('>')){
+				val = val.substring(0, val.length - 2);
+			}
 			values.push(createValue("[0]", val));
 			const remaining = value;
 			let i = 0;
@@ -146,7 +150,7 @@ export function expandValue(variableCreate: (arg: VariableObject | string, optio
 		let primitive: any;
 		let match;
 		value = value.trim();
-		if (value.length == 0)
+		if (value.length === 0)
 			primitive = undefined;
 		else if (value.startsWith("true")) {
 			primitive = "true";
@@ -187,21 +191,30 @@ export function expandValue(variableCreate: (arg: VariableObject | string, optio
 
 	parseValue = () => {
 		value = value.trim();
-		if (value[0] == '"')
+		if (value[0] === '"')
 			return parseCString();
-		else if (value[0] == '{')
+		else if (value[0] === '{')
 			return parseTupleOrList();
+		else if(value.startsWith("std::")){
+			const eqPos = value.indexOf("=");
+			value = value.substring(eqPos + 2);
+			return parseValue();
+		}
 		else
 			return parsePrimitive();
 	};
 
 	parseResult = (pushToStack: boolean = false) => {
-		value = value.trim();
+		value = value.replace(/^</, "").trim().replace(/^static /, "");
 		const variableMatch = resultRegex.exec(value);
 		if (!variableMatch)
 			return undefined;
 		value = value.substring(variableMatch[0].length).trim();
-		const name = variable = variableMatch[1];
+		let name = variable = variableMatch[1].trim();
+		const tmpName = name.split(" ");
+		if(tmpName.length > 1 && !name.includes("anonymous union") && !name.includes(',')){
+			name = tmpName[tmpName.length - 1];
+		}
 		if (pushToStack)
 			stack.push(variable);
 		const val = parseValue();
@@ -212,10 +225,10 @@ export function expandValue(variableCreate: (arg: VariableObject | string, optio
 
 	createValue = (name: string, val: any) => {
 		let ref = 0;
-		if (typeof val == "object") {
+		if (typeof val === "object") {
 			ref = variableCreate(val);
 			val = "Object";
-		} else if (typeof val == "string" && val.startsWith("*0x")) {
+		} else if (typeof val === "string" && val.startsWith("*0x")) {
 			if (extra && MINode.valueOf(extra, "arg") == "1") {
 				ref = variableCreate(getNamespace("*(" + name), { arg: true });
 				val = "<args>";
@@ -223,13 +236,16 @@ export function expandValue(variableCreate: (arg: VariableObject | string, optio
 				ref = variableCreate(getNamespace("*" + name));
 				val = "Object@" + val;
 			}
-		} else if (typeof val == "string" && val.startsWith("@0x")) {
+		} else if (typeof val === "string" && val.startsWith("@0x")) {
 			ref = variableCreate(getNamespace("*&" + name.substring(1)));
 			val = "Ref" + val;
-		} else if (typeof val == "string" && val.startsWith("<...>")) {
+		} else if (typeof val === "string" && val.startsWith("<...>")) {
 			ref = variableCreate(getNamespace(name));
 			val = "...";
 		}
+		value = value.trim();
+		value = value.replace(/^, <No data fields>/, "");
+
 		return {
 			name: name,
 			value: val,
@@ -239,7 +255,7 @@ export function expandValue(variableCreate: (arg: VariableObject | string, optio
 
 	parseCommaValue = () => {
 		value = value.trim();
-		if (value[0] != ',')
+		if (value[0] !== ',')
 			return undefined;
 		value = value.substring(1).trim();
 		return parseValue();
@@ -247,7 +263,7 @@ export function expandValue(variableCreate: (arg: VariableObject | string, optio
 
 	parseCommaResult = (pushToStack: boolean = false) => {
 		value = value.trim();
-		if (value[0] != ',')
+		if (value[0] !== ',')
 			return undefined;
 		value = value.substring(1).trim();
 		return parseResult(pushToStack);

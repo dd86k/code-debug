@@ -71,7 +71,7 @@ export class MI2DebugSession extends DebugSession {
 					const spaceIndex = rawCmd.indexOf(" ");
 					let func = rawCmd;
 					let args = [];
-					if (spaceIndex != -1) {
+					if (spaceIndex !== -1) {
 						func = rawCmd.substring(0, spaceIndex);
 						args = JSON.parse(rawCmd.substring(spaceIndex + 1));
 					}
@@ -81,14 +81,14 @@ export class MI2DebugSession extends DebugSession {
 				});
 			});
 			this.commandServer.on("error", err => {
-				if (process.platform != "win32")
+				if (process.platform !== "win32")
 					this.handleMsg("stderr", "Code-Debug WARNING: Utility Command Server: Error in command socket " + err.toString() + "\nCode-Debug WARNING: The examine memory location command won't work");
 			});
 			if (!fs.existsSync(systemPath.join(os.tmpdir(), "code-debug-sockets")))
 				fs.mkdirSync(systemPath.join(os.tmpdir(), "code-debug-sockets"));
 			this.commandServer.listen(this.serverPath = systemPath.join(os.tmpdir(), "code-debug-sockets", ("Debug-Instance-" + Math.floor(Math.random() * 36 * 36 * 36 * 36).toString(36)).toLowerCase()));
 		} catch (e) {
-			if (process.platform != "win32")
+			if (process.platform !== "win32")
 				this.handleMsg("stderr", "Code-Debug WARNING: Utility Command Server: Failed to start " + e.toString() + "\nCode-Debug WARNING: The examine memory location command won't work");
 		}
 	}
@@ -96,9 +96,15 @@ export class MI2DebugSession extends DebugSession {
 	// verifies that the specified command can be executed
 	protected checkCommand(debuggerName: string): boolean {
 		try {
-			const command = process.platform === 'win32' ? 'where' : 'command -v';
-			execSync(`${command} ${debuggerName}`, { stdio: 'ignore' });
-			return true;
+			if (process.platform === 'win32' && debuggerName.includes("\\")) {
+				// For Windows paths containing backslashes, check if the file exists directly
+				return fs.existsSync(debuggerName);
+			}
+			else {
+				const command = process.platform === 'win32' ? 'where' : 'command -v';
+				execSync(`${command} ${debuggerName}`, { stdio: 'ignore' });
+				return true;
+			}
 		} catch (error) {
 			return false;
 		}
@@ -122,28 +128,28 @@ export class MI2DebugSession extends DebugSession {
 	}
 
 	protected handleMsg(type: string, msg: string) {
-		if (type == "target")
+		if (type === "target")
 			type = "stdout";
-		if (type == "log")
+		if (type === "log")
 			type = "stderr";
 		this.sendEvent(new OutputEvent(msg, type));
 	}
 
 	protected handleBreakpoint(info: MINode) {
 		const event = new StoppedEvent("breakpoint", parseInt(info.record("thread-id")));
-		(event as DebugProtocol.StoppedEvent).body.allThreadsStopped = info.record("stopped-threads") == "all";
+		(event as DebugProtocol.StoppedEvent).body.allThreadsStopped = info.record("stopped-threads") === "all";
 		this.sendEvent(event);
 	}
 
 	protected handleBreak(info?: MINode) {
 		const event = new StoppedEvent("step", info ? parseInt(info.record("thread-id")) : 1);
-		(event as DebugProtocol.StoppedEvent).body.allThreadsStopped = info ? info.record("stopped-threads") == "all" : true;
+		(event as DebugProtocol.StoppedEvent).body.allThreadsStopped = info ? info.record("stopped-threads") === "all" : true;
 		this.sendEvent(event);
 	}
 
 	protected handlePause(info: MINode) {
 		const event = new StoppedEvent("user request", parseInt(info.record("thread-id")));
-		(event as DebugProtocol.StoppedEvent).body.allThreadsStopped = info.record("stopped-threads") == "all";
+		(event as DebugProtocol.StoppedEvent).body.allThreadsStopped = info.record("stopped-threads") === "all";
 		this.sendEvent(event);
 	}
 
@@ -152,7 +158,7 @@ export class MI2DebugSession extends DebugSession {
 			this.crashed = true;
 		if (!this.quit) {
 			const event = new StoppedEvent("exception", parseInt(info.record("thread-id")));
-			(event as DebugProtocol.StoppedEvent).body.allThreadsStopped = info.record("stopped-threads") == "all";
+			(event as DebugProtocol.StoppedEvent).body.allThreadsStopped = info.record("stopped-threads") === "all";
 			this.sendEvent(event);
 		}
 	}
@@ -342,18 +348,18 @@ export class MI2DebugSession extends DebugSession {
 		switch (this.initialRunCommand) {
 			case RunCommand.CONTINUE:
 			case RunCommand.NONE:
-				if (typeof this.stopAtEntry == 'boolean' && this.stopAtEntry)
+				if (typeof this.stopAtEntry === 'boolean' && this.stopAtEntry)
 					entryPoint = "main"; // sensible default
-				else if (typeof this.stopAtEntry == 'string')
+				else if (typeof this.stopAtEntry === 'string')
 					entryPoint = this.stopAtEntry;
 				break;
 			case RunCommand.RUN:
-				if (typeof this.stopAtEntry == 'boolean' && this.stopAtEntry) {
+				if (typeof this.stopAtEntry === 'boolean' && this.stopAtEntry) {
 					if (this.miDebugger.features.includes("exec-run-start-option"))
 						runToStart = true;
 					else
 						entryPoint = "main"; // sensible fallback
-				} else if (typeof this.stopAtEntry == 'string')
+				} else if (typeof this.stopAtEntry === 'string')
 					entryPoint = this.stopAtEntry;
 				break;
 			default:
@@ -454,7 +460,7 @@ export class MI2DebugSession extends DebugSession {
 
 		if (id instanceof VariableScope) {
 			try {
-				if (id.name == "Registers") {
+				if (id.name === "Registers") {
 					const registers = await this.miDebugger.getRegisters();
 					for (const reg of registers) {
 						variables.push({
@@ -482,7 +488,7 @@ export class MI2DebugSession extends DebugSession {
 									const varId = this.variableHandlesReverse[varObjName];
 									varObj = this.variableHandles.get(varId) as any;
 								} catch (err) {
-									if (err instanceof MIError && (err.message == "Variable object not found" || err.message.endsWith("does not exist"))) {
+									if (err instanceof MIError && (err.message === "Variable object not found" || err.message.endsWith("does not exist"))) {
 										varObj = await this.miDebugger.varCreate(id.threadId, id.level, variable.name, varObjName);
 										const varId = findOrCreateVariable(varObj);
 										varObj.exp = variable.name;
@@ -503,7 +509,7 @@ export class MI2DebugSession extends DebugSession {
 							if (variable.valueStr !== undefined) {
 								let expanded = expandValue(createVariable, `{${variable.name}=${variable.valueStr})`, "", variable.raw);
 								if (expanded) {
-									if (typeof expanded[0] == "string")
+									if (typeof expanded[0] === "string")
 										expanded = [
 											{
 												name: "<value>",
@@ -517,7 +523,7 @@ export class MI2DebugSession extends DebugSession {
 								variables.push({
 									name: variable.name,
 									type: variable.type,
-									value: "<unknown>",
+									value: variable.type,
 									variablesReference: createVariable(variable.name)
 								});
 						}
@@ -530,18 +536,25 @@ export class MI2DebugSession extends DebugSession {
 			} catch (err) {
 				this.sendErrorResponse(response, 1, `Could not expand variable: ${err}`);
 			}
-		} else if (typeof id == "string") {
+		} else if (typeof id === "string") {
 			// Variable members
 			let variable;
 			try {
 				// TODO: this evaluates on an (effectively) unknown thread for multithreaded programs.
 				variable = await this.miDebugger.evalExpression(JSON.stringify(id), 0, 0);
 				try {
-					let expanded = expandValue(createVariable, variable.result("value"), id, variable);
+					let variableValue = variable.result("value");
+					const pattern = /'([^']*)' <repeats (\d+) times>/g;
+					variableValue = variableValue.replace(pattern, (_: any, char: string, count: string) => {
+						const repeatCount = parseInt(count, 10) + 1;
+						const repeatedArray = Array(repeatCount).fill(char);
+						return `{${repeatedArray.map(item => `'${item}'`).join(', ')}}`;
+					});
+					let expanded = expandValue(createVariable, variableValue, id, variable);
 					if (!expanded) {
 						this.sendErrorResponse(response, 2, `Could not expand variable`);
 					} else {
-						if (typeof expanded[0] == "string")
+						if (typeof expanded[0] === "string")
 							expanded = [
 								{
 									name: "<value>",
@@ -560,7 +573,7 @@ export class MI2DebugSession extends DebugSession {
 			} catch (err) {
 				this.sendErrorResponse(response, 1, `Could not expand variable: ${err}`);
 			}
-		} else if (typeof id == "object") {
+		} else if (typeof id === "object") {
 			if (id instanceof VariableObject) {
 				// Variable members
 				let children: VariableObject[];
@@ -599,13 +612,13 @@ export class MI2DebugSession extends DebugSession {
 							if (!expanded) {
 								this.sendErrorResponse(response, 15, `Could not expand variable`);
 							} else {
-								if (typeof expanded == "string") {
-									if (expanded == "<nullptr>") {
+								if (typeof expanded === "string") {
+									if (expanded === "<nullptr>") {
 										if (argsPart)
 											argsPart = false;
 										else
 											return submit();
-									} else if (expanded[0] != '"') {
+									} else if (expanded[0] !== '"') {
 										strArr.push({
 											name: "[err]",
 											value: expanded,
@@ -707,7 +720,7 @@ export class MI2DebugSession extends DebugSession {
 
 	protected override evaluateRequest(response: DebugProtocol.EvaluateResponse, args: DebugProtocol.EvaluateArguments): void {
 		const [threadId, level] = this.frameIdToThreadAndLevel(args.frameId);
-		if (args.context == "watch" || args.context == "hover") {
+		if (args.context === "watch" || args.context === "hover") {
 			this.miDebugger.evalExpression(args.expression, threadId, level).then((res) => {
 				response.body = {
 					variablesReference: 0,
@@ -715,11 +728,16 @@ export class MI2DebugSession extends DebugSession {
 				};
 				this.sendResponse(response);
 			}, msg => {
-				this.sendErrorResponse(response, 7, msg.toString());
+				if (args.context === "hover") {
+					// suppress error for hover as the user may just play with the mouse
+					this.sendResponse(response);
+				} else {
+					this.sendErrorResponse(response, 7, msg.toString());
+				}
 			});
 		} else {
 			this.miDebugger.sendUserInput(args.expression, threadId, level).then(output => {
-				if (typeof output == "undefined")
+				if (typeof output === "undefined")
 					response.body = {
 						result: "",
 						variablesReference: 0
@@ -768,7 +786,7 @@ export class MI2DebugSession extends DebugSession {
 }
 
 function prettyStringArray(strings: any) {
-	if (typeof strings == "object") {
+	if (typeof strings === "object") {
 		if (strings.length !== undefined)
 			return strings.join(", ");
 		else
